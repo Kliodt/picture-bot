@@ -1,0 +1,61 @@
+services:
+  db:
+    extends:
+      file: compose.yaml
+      service: db
+
+  server:
+    extends:
+      file: compose.yaml
+      service: server
+    build:
+      context: .
+      target: development
+    image: picture-bot-dev
+    command: ["python", "-m", "uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/server"]
+    environment:
+      WATCHFILES_FORCE_POLLING: "true"
+    volumes:
+      - ./server:/app/server
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/users', timeout=3).close()"]
+
+  bot:
+    extends:
+      file: compose.yaml
+      service: bot
+    build:
+      context: .
+      target: development
+    image: picture-bot-dev
+    command: ["watchfiles", "--filter", "python", "python -m bot.main", "/app/bot"]
+    environment:
+      WATCHFILES_FORCE_POLLING: "true"
+    volumes:
+      - ./bot:/app/bot
+
+  website:
+    image: node:22-bookworm-slim
+    working_dir: /app
+    command: ["sh", "-c", "npm ci && npm run dev -- --host 0.0.0.0 --strictPort"]
+    environment:
+      VITE_API_BASE_URL: ""
+      API_PROXY_TARGET: http://server:8000
+      DEV_POLLING: "true"
+    ports:
+      - "127.0.0.1:5173:5173"
+    volumes:
+      - ./website:/app
+      - website-node-modules:/app/node_modules
+    depends_on:
+      server:
+        condition: service_healthy
+
+volumes:
+  db-data:
+  shared-images:
+  website-node-modules:
+
+secrets:
+  google_vision_key:
+    file: ./google_key.json

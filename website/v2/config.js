@@ -1,0 +1,18 @@
+export const SETTINGS = {
+    refreshInterval: 6_000,
+    appearanceDuration: 1400,
+    qrScale: 1,
+    logoScale: 1,
+    photoScale: 1,
+    photoScales: {},
+    averagePhotoWidth: 260,
+    maxPhotoHeight: 320,
+    sizeVariation: 0.25,
+    averageRotation: 0,
+    rotationVariation: 12,
+    edgeOverflowRatio: 0.2,
+    fullBrightnessCount: 50,
+    dimmingRate: 0.14,
+    minimumBrightness: 0.32,
+    placementSearchStep: 24,
+};

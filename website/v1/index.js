@@ -1,5 +1,5 @@
 'use strict';
-import { API } from './api.js';
+import { API } from '../api.js';
 
 
 let spinningAnimationID = null;

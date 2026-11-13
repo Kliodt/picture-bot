@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Picture Bot</title>
+    <link rel="stylesheet" href="./board.css">
+</head>
+<body>
+    <main id="board" aria-label="Доска с фотографиями">
+        <figure class="board-photo board-logo">
+            <img id="board-logo-image" src="/gala2026_2.png" width="2000" height="2000" alt="ITMO Mega Battle">
+            <div id="board-logo-bounds" aria-hidden="true"></div>
+        </figure>
+        <div id="board-photos"></div>
+    </main>
+    <figure class="board-photo board-qr">
+        <img src="/qr.png" alt="Отправить фото через Telegram">
+    </figure>
+    <script type="module" src="./board.js"></script>
+</body>
+</html>

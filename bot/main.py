@@ -40,6 +40,7 @@ async def bot_main() -> None:
     dp.update.middleware(BanCheckMiddleware())
 
     dp.include_router(routes.start_router)
+    dp.include_router(routes.help_router)
     dp.include_router(routes.megabattle_router)
     dp.include_router(routes.support_router)
     dp.include_router(routes.picture_router)

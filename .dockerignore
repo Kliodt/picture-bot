@@ -1,0 +1,13 @@
+.git
+.env*
+.claude
+.codex
+.agents
+.aws
+.vscode
+**/__pycache__
+**/node_modules
+**/google_key.json
+website/dist
+server/static
+sharedImages

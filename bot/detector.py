@@ -1,3 +1,6 @@
+import os
+
+
 _LIKELIHOOD = (
     "UNKNOWN",
     "VERY_UNLIKELY",
@@ -12,7 +15,8 @@ def detect_safe_search(filepath: str) -> tuple[bool, str]:
     """Detects unsafe features in the file. Blocking — run via asyncio.to_thread."""
     from google.cloud import vision
 
-    client = vision.ImageAnnotatorClient.from_service_account_file("google_key.json")
+    key_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "google_key.json")
+    client = vision.ImageAnnotatorClient.from_service_account_file(key_path)
 
     with open(filepath, "rb") as f:
         content = f.read()

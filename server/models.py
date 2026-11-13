@@ -14,16 +14,7 @@ class User(Model):
 
     username = fields.CharField(max_length=256)
 
-    is_member = fields.BooleanField(default=False)
-    is_organizer = fields.BooleanField(default=False)
-    is_moderator = fields.BooleanField(default=False)
-    
-    def get_user_image_daily_limit(self) -> int:
-        if self.is_organizer:
-            return 100
-        if self.is_member:
-            return 50
-        return 20
+    daily_limit = fields.IntField(default=30)
 
     class Meta(Model.Meta):
         table="users"

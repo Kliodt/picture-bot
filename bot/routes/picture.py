@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 import re
 import uuid
@@ -14,6 +15,10 @@ from bot.detector import detect_safe_search
 
 
 router = Router()
+logger = logging.getLogger(__name__)
+MAX_IMAGE_SIZE_MB = int(os.getenv("MAX_IMAGE_SIZE_MB", "10"))
+MAX_IMAGE_SIZE = MAX_IMAGE_SIZE_MB * 1024 * 1024
+IMAGE_TOO_LARGE_MESSAGE = f"Фото слишком большое. Максимальный размер — {MAX_IMAGE_SIZE_MB} МБ."
 
 _group_messages: dict[str, list[Message]] = {}
 _group_tasks: dict[str, asyncio.Task] = {}
@@ -38,8 +43,16 @@ def _verification_keyboard(photo_id: int) -> InlineKeyboardMarkup:
     ]])
 
 
+def _truncate_caption(caption: str) -> str:
+    encoded = caption.encode("utf-16-le")
+    if len(encoded) > 2048:
+        return encoded[:2042].decode("utf-16-le", errors="ignore") + "..."
+    return caption
+
+
 def _replace_status(caption: str, new_status: str) -> str:
-    return re.sub(r"^Статус:.*$", f"Статус: {new_status}", caption, flags=re.MULTILINE)
+    caption = re.sub(r"^Статус:.*$", lambda _: f"Статус: {new_status}", caption, flags=re.MULTILINE)
+    return _truncate_caption(caption)
 
 
 @router.message(F.photo, StateFilter(None))
@@ -81,22 +94,40 @@ async def _process_messages(messages: list[Message]) -> None:
         if msg.photo is None:
             continue
         
-        photo = msg.photo[-1]
+        photo = next(
+            (photo for photo in reversed(msg.photo)
+             if photo.file_size is None or photo.file_size <= MAX_IMAGE_SIZE),
+            None,
+        )
+        if photo is None:
+            await msg.answer(IMAGE_TOO_LARGE_MESSAGE)
+            continue
         label = msg.caption or ""
+        if len(label) > 256:
+            label = label[:253] + "..."
         filepath = str(photos_dir / f"{uuid.uuid4()}.jpg")
 
         await bot.download(photo, destination=filepath)
 
         try:
-            photo_id = await Api.upload(tg_id, label, filepath, photo.file_id)
+            try:
+                photo_id = await Api.upload(tg_id, label, filepath, photo.file_id)
+            except aiohttp.ClientResponseError as e:
+                if e.status != 404:
+                    raise
+                await Api.createUser(
+                    tg_id=tg_id,
+                    tg_tag=first.from_user.username or "",
+                    username=first.from_user.full_name,
+                )
+                photo_id = await Api.upload(tg_id, label, filepath, photo.file_id)
             uploaded.append((photo.file_id, photo_id, filepath))
         except aiohttp.ClientResponseError as e:
             Path(filepath).unlink(missing_ok=True)
-            if e.status == 404:
-                await first.answer("Упс. Похоже, ты не зарегистрирован. Используй /start для регистрации.")
-                return
-            elif e.status == 429:
+            if e.status == 429:
                 hit_limit = True
+            elif e.status == 413:
+                await msg.answer(IMAGE_TOO_LARGE_MESSAGE)
             else:
                 raise
 
@@ -111,6 +142,7 @@ async def _process_messages(messages: list[Message]) -> None:
         try:
             passed, details = await asyncio.to_thread(detect_safe_search, filepath)
         except Exception as e:
+            logger.exception("Google Vision: ошибка проверки фото #%s, файл %s", photo_id, filepath)
             passed, details = False, f"Ошибка детектора: {e}"
 
         if passed:
@@ -121,12 +153,13 @@ async def _process_messages(messages: list[Message]) -> None:
         await bot.send_photo(
             ADMIN_CHAT,
             photo=file_id,
-            caption=(
+            caption=_truncate_caption(
                 f"Статус: {'Одобрено✅' if passed else 'Отклонено❌'} (auto)\n\n"
                 f"Пользователь: @{first.from_user.username} ({first.from_user.full_name})\n"
                 f"Фото #{photo_id}\n\n"
                 f"{details}\n"
             ),
+            parse_mode=None,
             reply_markup=_verification_keyboard(photo_id),
         )
 
@@ -143,7 +176,8 @@ async def handle_approve(callback: CallbackQuery) -> None:
         await callback.message.edit_caption(caption=_replace_status(
             callback.message.caption or "",
             f"Одобрено✅ (by @{callback.from_user.username or callback.from_user.full_name})"),
-            reply_markup=_verification_keyboard(photo_id)
+            reply_markup=_verification_keyboard(photo_id),
+            parse_mode=None,
         )
     await callback.answer("Фото одобрено✅")
 
@@ -160,6 +194,7 @@ async def handle_reject(callback: CallbackQuery) -> None:
         await callback.message.edit_caption(caption=_replace_status(
             callback.message.caption or "",
             f"Отклонено❌ (by @{callback.from_user.username or callback.from_user.full_name})"),
-            reply_markup=_verification_keyboard(photo_id)
+            reply_markup=_verification_keyboard(photo_id),
+            parse_mode=None,
         )
     await callback.answer("Фото отклонено❌")

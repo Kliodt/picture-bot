@@ -1,5 +1,8 @@
 from datetime import datetime, timezone
 from pathlib import Path
+from secrets import compare_digest
+
+import os
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,11 +18,25 @@ from server.models import Picture, User
 
 app = FastAPI()
 
-register_tortoise(app,
-                  db_url="postgres://postgres:1@localhost:5432/imbnow",
-                  modules={"models": ["server.models"]},
-                  add_exception_handlers=True,
-                  generate_schemas=True)
+models = {"models": ["server.models"]}
+connection = {
+    "engine": "tortoise.backends.asyncpg",
+    "credentials": {
+        "host": os.environ["POSTGRES_HOST"],
+        "port": 5432,
+        "user": os.environ["POSTGRES_USER"],
+        "password": os.environ["POSTGRES_PASSWORD"],
+        "database": os.environ["POSTGRES_DB"],
+    },
+}
+
+database = {
+    "connections": {"default": connection},
+    "apps": {"models": {"models": models["models"], "default_connection": "default"}},
+}
+register_tortoise(app, config=database, add_exception_handlers=True, generate_schemas=True)
+API_WRITE_TOKEN = os.getenv("API_WRITE_TOKEN", "")
+MAX_IMAGE_SIZE = int(os.getenv("MAX_IMAGE_SIZE_MB", "10")) * 1024 * 1024
 
 app.add_middleware(
     CORSMiddleware,
@@ -34,10 +51,15 @@ async def validation_error_handler(request: Request, exc: ValidationError):
 
 
 @app.middleware("http")
-async def localhost_only_post(request: Request, call_next):
-    if request.method != "GET" and (request.client is None or request.client.host not in ("127.0.0.1", "::1")):
-        raise HTTPException(
-            status_code=403, detail="This method is only allowed from localhost")
+async def restrict_writes(request: Request, call_next):
+    if request.method != "GET":
+        if API_WRITE_TOKEN:
+            supplied_token = request.headers.get("X-API-Write-Token", "")
+            allowed = compare_digest(supplied_token.encode(), API_WRITE_TOKEN.encode())
+        else:
+            allowed = request.client is not None and request.client.host in ("127.0.0.1", "::1")
+        if not allowed:
+            return JSONResponse(status_code=403, content={"detail": "Forbidden"})
     return await call_next(request)
 
 
@@ -50,13 +72,12 @@ CreateUserRequest = pydantic_model_creator(
 
 UserResponse = pydantic_model_creator(
     User, name="UserResponse",
-    include=('id', 'tg_id', 'tg_tag', 'username', 'is_banned',
-             'is_member', 'is_organizer', 'is_moderator'))
+    include=('id', 'tg_id', 'tg_tag', 'username', 'is_banned', 'daily_limit'))
 
 UpdateUserRequest = pydantic_model_creator(
     User, name="UpdateUserRequest",
-    include=('username', 'tg_tag', 'is_banned', 'is_member', 'is_organizer', 'is_moderator'),
-    optional=('username', 'tg_tag', 'is_banned', 'is_member', 'is_organizer', 'is_moderator'))
+    include=('username', 'tg_tag', 'is_banned', 'daily_limit'),
+    optional=('username', 'tg_tag', 'is_banned', 'daily_limit'))
 
 UploadPictureRequest = pydantic_model_creator(
     Picture, name="UploadPictureRequest",
@@ -78,7 +99,10 @@ UpdatePictureRequest = pydantic_model_creator(
 
 @app.post("/users", response_model=UserResponse)
 async def create_user(body: CreateUserRequest):  # type: ignore
-    user = await User.create(**body.dict())
+    user, _ = await User.get_or_create(
+        tg_id=body.tg_id,
+        defaults={"tg_tag": body.tg_tag, "username": body.username},
+    )
     return user
 
 
@@ -108,7 +132,7 @@ async def upload(tg_id: int, body: UploadPictureRequest):  # type: ignore
     today_start = datetime.now(tz=timezone.utc).replace(
         hour=0, minute=0, second=0, microsecond=0)
     daily_count = await Picture.filter(created_by=user, created_at__gt=today_start).count()
-    if daily_count >= user.get_user_image_daily_limit():
+    if daily_count >= user.daily_limit:
         raise HTTPException(
             status_code=429, detail="Daily upload limit reached")
 
@@ -116,18 +140,23 @@ async def upload(tg_id: int, body: UploadPictureRequest):  # type: ignore
         raise HTTPException(
             status_code=400, detail=f"File {body.filename} doesn't exist")
 
+    if Path(body.filename).stat().st_size > MAX_IMAGE_SIZE:
+        raise HTTPException(status_code=413, detail="Image file is too large")
+
     picture = await Picture.create(
         filename=body.filename, tg_id=body.tg_id, created_by=user, label=body.label)
     return picture
 
 
 @app.get("/pictures", response_model=list[PictureResponse])
-async def get_pictures(from_date: datetime, to_date: datetime):
-    return await Picture.filter(
-        accepted_at__gte=from_date,
-        accepted_at__lte=to_date,
-        accepted=True
-    ).order_by("-accepted_at")
+async def get_pictures(from_date: datetime | None = None, to_date: datetime | None = None):
+    query = Picture.filter(accepted=True)
+    if from_date is not None:
+        query = query.filter(accepted_at__gte=from_date)
+    if to_date is not None:
+        query = query.filter(accepted_at__lte=to_date)
+    pictures = await query.order_by("-accepted_at", "-id")
+    return [picture for picture in pictures if Path(picture.filename).is_file()]
 
 
 @app.get("/pictures/{picture_id}/download")
@@ -149,4 +178,5 @@ async def patch_picture(picture_id: int, body: UpdatePictureRequest):  # type: i
 
 # --- Статика — должно быть последним ---
 
-app.mount("/", StaticFiles(directory=Path(__file__).parent / "static", html=True), name="static")
+static_directory = os.getenv("STATIC_DIR", str(Path(__file__).parent / "static"))
+app.mount("/", StaticFiles(directory=static_directory, html=True), name="static")

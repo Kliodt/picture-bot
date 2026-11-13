@@ -1,0 +1,83 @@
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+}
+
+body {
+    background: #191d28;
+    font-family: 'Segoe UI', sans-serif;
+}
+
+#board {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    isolation: isolate;
+    background: #191d28 url('/board-background.png') center / cover no-repeat;
+}
+
+#board-photos {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+}
+
+.board-photo {
+    position: absolute;
+    margin: 0;
+    border: 8px solid #f7f3e8;
+    box-shadow: 1px 3px 5px #25160666, 3px 8px 17px #25160638;
+    transform-origin: center;
+}
+
+.board-photo img {
+    display: block;
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+    background: #e5dfd1;
+}
+
+.board-qr {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    width: 150px;
+    z-index: 9999;
+    transform: scale(var(--qr-scale, 1));
+    transform-origin: bottom right;
+}
+
+.board-qr img {
+    padding: 6px;
+    background: #191d28;
+}
+
+.board-logo {
+    left: 50%;
+    top: 50%;
+    width: 680px;
+    border-width: 24px;
+    transform: translate(-50%, -50%) scale(var(--logo-scale, 1));
+    z-index: 0;
+}
+
+.board-logo img {
+    background: #191d28;
+}
+
+#board-logo-bounds {
+    position: absolute;
+    inset: 20% 5%;
+    /* border: 2px solid #f00;
+    background: rgb(255 0 0 / 15%); */
+    pointer-events: none;
+}
+

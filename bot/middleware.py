@@ -3,7 +3,7 @@ import time
 from typing import Any, Awaitable, Callable
 
 from aiogram import BaseMiddleware
-from aiogram.types import Message, TelegramObject
+from aiogram.types import Message, TelegramObject, Update
 
 from bot.api import Api
 
@@ -33,7 +33,7 @@ class BanCheckMiddleware(BaseMiddleware):
 
         user = data.get("event_from_user")
         if user and user.id in self.banned_ids:
-            if isinstance(event, Message):
-                await event.answer("И чего ты добился? Ты забанен и больше не можешь использовать бота😈")
+            if isinstance(event, Update) and event.message:
+                await event.message.answer("Ты забанен и больше не можешь использовать бота😈")
             return None
         return await handler(event, data)

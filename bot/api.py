@@ -1,13 +1,16 @@
 import aiohttp
 from datetime import datetime, timezone
+import os
 
-BASE_URL = "http://localhost:8000"
+BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000").rstrip("/")
+API_WRITE_TOKEN = os.getenv("API_WRITE_TOKEN")
+API_HEADERS = {"X-API-Write-Token": API_WRITE_TOKEN} if API_WRITE_TOKEN else {}
 
 
 class Api:
     @staticmethod
     async def createUser(tg_id: int, tg_tag: str, username: str) -> int:
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(headers=API_HEADERS) as session:
             async with session.post(f"{BASE_URL}/users", json={
                 "tg_id": tg_id,
                 "tg_tag": tg_tag,
@@ -19,7 +22,7 @@ class Api:
 
     @staticmethod
     async def upload(tg_id: int, label: str, filepath: str, photo_tg_id: str) -> int:
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(headers=API_HEADERS) as session:
             async with session.post(f"{BASE_URL}/users/{tg_id}/pictures", json={
                 "filename": filepath,
                 "tg_id": photo_tg_id,
@@ -31,7 +34,7 @@ class Api:
 
     @staticmethod
     async def getUser(tg_id: int) -> dict | None:
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(headers=API_HEADERS) as session:
             async with session.get(f"{BASE_URL}/users/{tg_id}") as resp:
                 if resp.status == 404:
                     return None
@@ -40,7 +43,7 @@ class Api:
 
     @staticmethod
     async def getPicture(photo_id: int) -> dict | None:
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(headers=API_HEADERS) as session:
             async with session.get(f"{BASE_URL}/pictures/{photo_id}") as resp:
                 if resp.status == 404:
                     return None
@@ -49,7 +52,7 @@ class Api:
 
     @staticmethod
     async def approve(photo_id: int) -> None:
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(headers=API_HEADERS) as session:
             async with session.patch(f"{BASE_URL}/pictures/{photo_id}", json={
                 "accepted": True,
                 "accepted_at": datetime.now(timezone.utc).isoformat(),
@@ -58,7 +61,7 @@ class Api:
 
     @staticmethod
     async def reject(photo_id: int) -> None:
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(headers=API_HEADERS) as session:
             async with session.patch(f"{BASE_URL}/pictures/{photo_id}", json={
                 "accepted": False,
                 "accepted_at": None
@@ -67,23 +70,7 @@ class Api:
 
     @staticmethod
     async def getUsers() -> list[dict]:
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(headers=API_HEADERS) as session:
             async with session.get(f"{BASE_URL}/users") as resp:
                 resp.raise_for_status()
                 return await resp.json()
-
-    @staticmethod
-    async def approveMember(tg_id: int) -> None:
-        async with aiohttp.ClientSession() as session:
-            async with session.patch(f"{BASE_URL}/users/{tg_id}", json={
-                "is_member": True,
-            }) as resp:
-                resp.raise_for_status()
-
-    @staticmethod
-    async def rejectMember(tg_id: int) -> None:
-        async with aiohttp.ClientSession() as session:
-            async with session.patch(f"{BASE_URL}/users/{tg_id}", json={
-                "is_member": False,
-            }) as resp:
-                resp.raise_for_status()

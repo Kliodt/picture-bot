@@ -1,0 +1,7 @@
+aiogram==3.27.0
+aiohttp==3.13.5
+asyncpg==0.31.0
+fastapi==0.128.1
+google-cloud-vision==3.14.0
+tortoise-orm==1.1.6
+uvicorn==0.40.0
