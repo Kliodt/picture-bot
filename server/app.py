@@ -52,7 +52,7 @@ async def validation_error_handler(request: Request, exc: ValidationError):
 
 @app.middleware("http")
 async def restrict_writes(request: Request, call_next):
-    if request.method != "GET":
+    if request.method not in ("GET", "HEAD", "OPTIONS"):
         if API_WRITE_TOKEN:
             supplied_token = request.headers.get("X-API-Write-Token", "")
             allowed = compare_digest(supplied_token.encode(), API_WRITE_TOKEN.encode())

@@ -24,7 +24,7 @@ services:
       MAX_IMAGE_SIZE_MB: "${MAX_IMAGE_SIZE_MB:-10}"
       API_WRITE_TOKEN: "${API_WRITE_TOKEN:?Set API_WRITE_TOKEN in .env}"
     ports:
-      - "${SITE_BIND_ADDRESS:-127.0.0.1}:${SITE_PORT:-36096}:8000"
+      - "${SITE_BIND_ADDRESS:-0.0.0.0}:${SITE_PORT:-36096}:8000"
     volumes:
       - shared-images:/app/sharedImages:ro
     depends_on:
